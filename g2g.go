@@ -19,6 +19,7 @@ type Graphite struct {
 	timeout       time.Duration
 	connection    net.Conn
 	vars          map[string]expvar.Var
+	flush         map[string]bool
 	registrations chan namedVar
 	shutdown      chan chan bool
 }
@@ -27,6 +28,7 @@ type Graphite struct {
 type namedVar struct {
 	name string
 	v    expvar.Var
+	t    string
 }
 
 // NewGraphite returns a Graphite structure with an open and working
@@ -41,6 +43,7 @@ func NewGraphite(endpoint string, interval, timeout time.Duration) (*Graphite, e
 		timeout:       timeout,
 		connection:    nil,
 		vars:          map[string]expvar.Var{},
+		flush:         map[string]bool{},
 		registrations: make(chan namedVar),
 		shutdown:      make(chan chan bool),
 	}
@@ -55,7 +58,11 @@ func NewGraphite(endpoint string, interval, timeout time.Duration) (*Graphite, e
 // interval, the current value of the given expvar will be published to
 // Graphite under the given name.
 func (g *Graphite) Register(name string, v expvar.Var) {
-	g.registrations <- namedVar{name, v}
+	g.registrations <- namedVar{name, v, "generic"}
+}
+
+func (g *Graphite) RegisterFlushed(name string, v expvar.Var) {
+	g.registrations <- namedVar{name, v, "flush"}
 }
 
 // Shutdown signals the Graphite structure to stop publishing
@@ -73,6 +80,9 @@ func (g *Graphite) loop() {
 		select {
 		case nv := <-g.registrations:
 			g.vars[nv.name] = nv.v
+			if nv.t == "flush" {
+				g.flush[nv.name] = true
+			}
 		case <-ticker.C:
 			g.postAll()
 		case q := <-g.shutdown:
@@ -105,6 +115,10 @@ func (g *Graphite) postAll() {
 		val := roundFloat(v.String(), 2)
 		if err := g.postOne(name, val); err != nil {
 			log.Printf("g2g: %s: %s", name, err)
+		}
+		
+		if _, ok := g.flush[name]; ok {
+			v.Set(int64(0))
 		}
 	}
 }
