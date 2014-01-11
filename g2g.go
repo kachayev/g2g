@@ -118,7 +118,7 @@ func (g *Graphite) postAll() {
 		}
 		
 		if _, ok := g.flush[name]; ok {
-			v.(*Int).Set(int64(0))
+			v.(*expvar.Int).Set(int64(0))
 		}
 	}
 }
