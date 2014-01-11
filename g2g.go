@@ -118,6 +118,7 @@ func (g *Graphite) postAll() {
 		}
 		
 		if _, ok := g.flush[name]; ok {
+			log.Printf("Flush counter #%s to graphite: %s", name, v.String())
 			v.(*expvar.Int).Set(int64(0))
 		}
 	}
